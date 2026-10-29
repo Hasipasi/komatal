@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Komatál</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍲</text></svg>">
+<style>
+  body { font: 18px/1.5 system-ui, sans-serif; background: #fdf6ec; color: #3b2f2a; margin: 0; padding: 16px; }
+  main { max-width: 40rem; margin: 2rem auto; }
+  section { background: #fff; padding: 1.5rem; border-radius: 16px; box-shadow: 0 4px 20px #0001; margin-bottom: 1.5rem; }
+  h1 { font-size: 2.2rem; margin: 0; }
+  h2 { margin: 0 0 .5rem; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: .5rem; border-bottom: 1px solid #eee2d6; vertical-align: top; }
+  td:first-child { white-space: nowrap; }
+  label, legend { display: block; margin-top: 1rem; font-weight: 600; }
+  fieldset { border: 0; padding: 0; margin: 0; }
+  fieldset label, .check { font-weight: 400; margin-top: .25rem; }
+  input:not([type=radio], [type=checkbox]) { width: 100%; box-sizing: border-box; padding: .6rem; font: inherit; border: 1px solid #d8c8b8; border-radius: 8px; margin-top: .25rem; }
+  button { margin-top: 1.5rem; width: 100%; padding: .8rem; font: inherit; font-weight: 700; background: #c8553d; color: #fff; border: 0; border-radius: 8px; cursor: pointer; }
+  button:hover { background: #a8432f; }
+  button:disabled { opacity: .6; }
+  small, #status { color: #8a7a70; font-weight: 400; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🍲 Komatál</h1>
+  <p>Kedves Barátaink! Köszönjük, hogy segítetek nekünk az első hetekben. Az oldal alján láthatod, ki mit hoz, hogy ne legyen két rakott krumpli egymás után. 🙂</p>
+
+  <section>
+    <h2>Jelentkezés</h2>
+    <form>
+      <label>Neved <input name="nev" required maxlength="100"></label>
+      <label>Melyik napon hozod? <input type="date" name="datum" required></label>
+      <fieldset>
+        <legend>Hány napra főzöl?</legend>
+        <label><input type="radio" name="napok" value="1" checked> 1 napra</label>
+        <label><input type="radio" name="napok" value="2"> 2 napra <small>(aznapra és másnapra)</small></label>
+      </fieldset>
+      <label>Mit hozol? <small>(pl. húsleves, rakott krumpli, sütemény)</small>
+        <input name="menu" required maxlength="300"></label>
+      <label>Email <small>(csak mi látjuk)</small>
+        <input type="email" name="email" required maxlength="100"></label>
+      <label>Telefonszám <small>(csak mi látjuk)</small>
+        <input type="tel" name="telefon" required maxlength="30"></label>
+      <label class="check"><input type="checkbox" name="mutat" value="igen" checked> Megjelenhet a nevem a listában</label>
+      <input name="honlap" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px">
+      <button>Jelentkezem</button>
+      <p id="status" role="status"></p>
+    </form>
+  </section>
+
+  <section>
+    <h2>Ki mit hoz?</h2>
+    <table>
+      <thead><tr><th>Dátum</th><th>Név</th><th>Menü</th></tr></thead>
+      <tbody><tr><td colspan="3">Betöltés…</td></tr></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbxan8wt4YgnZrocXf80Cx-Pu6cEzFAK6QHtaA7JdhD3VLNy-aNpP2eTSlwXKhskI6Wj4A/exec'; // Apps Script web app (see Code.gs)
+const tbody = document.querySelector('tbody');
+const form = document.querySelector('form');
+const msg = document.getElementById('status');
+
+const row = cells => {
+  const tr = document.createElement('tr');
+  for (const v of cells) tr.insertCell().textContent = v;
+  return tr;
+};
+const day = ms => new Date(ms).toLocaleDateString('hu-HU', { timeZone: 'UTC', month: 'short', day: 'numeric', weekday: 'short' });
+
+async function load() {
+  try {
+    // skip rows that were cleared in the sheet instead of deleted
+    const rows = (await (await fetch(API)).json()).filter(r => r.datum);
+    rows.sort((a, b) => a.datum.localeCompare(b.datum));
+    tbody.replaceChildren(...rows.map(r => {
+      const start = Date.parse(r.datum);
+      return row([
+        day(start) + (r.napok === '2' ? ' – ' + day(start + 864e5) : ''),
+        r.nev || 'Névtelen', r.menu,
+      ]);
+    }));
+    if (!rows.length) tbody.replaceChildren(row(['Még senki, légy te az első!', '', '']));
+  } catch {
+    tbody.replaceChildren(row(['Nem sikerült betölteni a listát.', '', '']));
+  }
+}
+
+form.onsubmit = async e => {
+  e.preventDefault();
+  form.querySelector('button').disabled = true;
+  try {
+    // no-cors: Apps Script's redirect has no CORS headers on POST, the row still gets saved
+    await fetch(API, { method: 'POST', mode: 'no-cors', body: new URLSearchParams(new FormData(form)) });
+    form.reset();
+    msg.textContent = 'Köszönjük! Bekerültél a listába. ❤️';
+    load();
+  } catch {
+    msg.textContent = 'Hiba történt, próbáld újra!';
+  }
+  form.querySelector('button').disabled = false;
+};
+
+load();
+</script>
+</body>
+</html>
