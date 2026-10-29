@@ -33,7 +33,7 @@
     <h2>Jelentkezés</h2>
     <form>
       <label>Neved <input name="nev" required maxlength="100"></label>
-      <label>Melyik napon hozod? <input type="date" name="datum" required></label>
+      <label>Melyik napon hozod? <input type="date" name="datum" required min="2026-11-01" max="2026-11-30"></label>
       <fieldset>
         <legend>Hány napra főzöl?</legend>
         <label><input type="radio" name="napok" value="1" checked> 1 napra</label>
