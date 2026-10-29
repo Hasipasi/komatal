@@ -26,6 +26,11 @@
   button:disabled { opacity: .6; }
   small, #status { color: #8a7a70; font-weight: 400; }
   #warn { color: #a8432f; font-weight: 600; margin: .25rem 0 0; }
+  .egg { display: block; color: #c8553d; font-weight: 400; font-style: italic; margin: .25rem 0 0; }
+  .egg:empty { display: none; }
+  #pot { user-select: none; }
+  .drop { position: fixed; top: -3rem; font-size: 2rem; pointer-events: none; animation: fall linear forwards; z-index: 9; }
+  @keyframes fall { to { transform: translateY(calc(100vh + 6rem)) rotate(360deg); } }
   .days { display: grid; grid-template-columns: repeat(7, 1fr); gap: .3rem; margin-top: .25rem; text-align: center; }
   .days span { font-size: .8rem; color: #8a7a70; }
   .days label { position: relative; margin: 0; padding: .5rem 0; border: 1px solid #d8c8b8; border-radius: 8px; cursor: pointer; }
@@ -40,7 +45,7 @@
 </head>
 <body>
 <main>
-  <h1>🍲 Komatál</h1>
+  <h1><span id="pot">🍲</span> Komatál</h1>
   <p>Kedves Barátaink! Köszönjük, hogy segítetek nekünk az első hetekben. Az oldal alján láthatod, ki mit hoz, hogy ne legyen két rakott krumpli egymás után. 🙂</p>
 
   <section>
@@ -54,6 +59,7 @@
         </div>
         <small>A szürke napokra már jelentkezett valaki.</small>
         <p id="warn" role="status"></p>
+        <p id="bday" class="egg" role="status"></p>
       </fieldset>
       <fieldset>
         <legend>Hány napra főzöl?</legend>
@@ -61,7 +67,7 @@
         <label><input type="radio" name="napok" value="2"> 2 napra <small>(aznapra és másnapra)</small></label>
       </fieldset>
       <label>Mit hozol? <small>(pl. húsleves, rakott krumpli, sütemény)</small>
-        <input name="menu" required maxlength="300"></label>
+        <input name="menu" required maxlength="300"><span id="krumpli" class="egg"></span></label>
       <label>Telefonszám <small>(csak mi látjuk)</small>
         <input type="tel" name="telefon" required maxlength="30"></label>
       <label class="check"><input type="checkbox" name="mutat" value="igen" checked> Megjelenhet a nevem a listában</label>
@@ -114,8 +120,32 @@ function update() {
   warn.textContent = clash.length
     ? '⚠️ Erre már jelentkezett valaki: ' + clash.map(d => `nov. ${span(d)} –${taken.get(d).join(', ')}`).join('; ')
     : '';
+  // easter eggs: 1-month birthday (born Oct 14), and the intro's rakott krumpli joke
+  document.getElementById('bday').textContent = picked.includes('2026-11-14') ? '🎂 Ezen a napon lesz 1 hónapos a kicsi!' : '';
+  document.getElementById('krumpli').textContent = /rakott\s*krumpli/i.test(f.get('menu')) ? 'Nagyon szeretem a rakott krumplit' : '';
 }
-form.onchange = update;
+form.oninput = update;
+
+// easter egg: food rain, on 5 clicks of the pot and after signing up
+function rain(n = 40) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const food = ['🍲', '🥘', '🍰', '🥟', '🍜', '🥧'];
+  for (let i = 0; i < n; i++) {
+    const s = document.createElement('span');
+    s.className = 'drop';
+    s.textContent = food[Math.floor(Math.random() * food.length)];
+    s.style.left = Math.random() * 92 + 'vw';
+    s.style.animationDuration = 2 + Math.random() * 2 + 's';
+    s.style.animationDelay = Math.random() + 's';
+    s.onanimationend = () => s.remove();
+    document.body.append(s);
+  }
+}
+let potClicks = 0;
+document.getElementById('pot').onclick = () => { if (++potClicks % 5 === 0) rain(); };
+
+// easter egg: tab title when they look away
+document.onvisibilitychange = () => { document.title = document.hidden ? 'Kihűl a leves!' : 'Komatál'; };
 
 // ponytail: November 2026 hardcoded: 30 days, the 1st is a Sunday (7th column, weeks start on Monday)
 for (let d = 1; d <= 30; d++) {
@@ -149,6 +179,7 @@ form.onsubmit = async e => {
     await fetch(API, { method: 'POST', mode: 'no-cors', body: new URLSearchParams(new FormData(form)) });
     form.reset();
     msg.textContent = 'Köszönjük! Bekerültél a listába. ❤️';
+    rain(25);
     load();
   } catch {
     msg.textContent = 'Hiba történt, próbáld újra!';
