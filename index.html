@@ -11,9 +11,12 @@
   section { background: #fff; padding: 1.5rem; border-radius: 16px; box-shadow: 0 4px 20px #0001; margin-bottom: 1.5rem; }
   h1 { font-size: 2.2rem; margin: 0; }
   h2 { margin: 0 0 .5rem; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: .5rem; border-bottom: 1px solid #eee2d6; vertical-align: top; }
-  td:first-child { white-space: nowrap; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  th, td { text-align: left; padding: .5rem .3rem; border-bottom: 1px solid #eee2d6; vertical-align: top; overflow-wrap: anywhere; hyphens: auto; }
+  th:first-child { width: 4em; }
+  th:nth-child(2) { width: 26%; }
+  td:first-child { white-space: pre; }
+  @media (max-width: 480px) { section { padding: 1rem; } table { font-size: .9em; } }
   label, legend { display: block; margin-top: 1rem; font-weight: 600; }
   fieldset { border: 0; padding: 0; margin: 0; }
   fieldset label, .check { font-weight: 400; margin-top: .25rem; }
@@ -71,7 +74,7 @@
   <section>
     <h2>Ki mit hoz?</h2>
     <table>
-      <thead><tr><th>Dátum</th><th>Név</th><th>Menü</th></tr></thead>
+      <thead><tr><th>Nap</th><th>Név</th><th>Menü</th></tr></thead>
       <tbody><tr><td colspan="3">Betöltés…</td></tr></tbody>
     </table>
   </section>
@@ -88,7 +91,12 @@ const row = cells => {
   for (const v of cells) tr.insertCell().textContent = v;
   return tr;
 };
-const day = ms => new Date(ms).toLocaleDateString('hu-HU', { timeZone: 'UTC', month: 'short', day: 'numeric', weekday: 'short' });
+const WD = ['V', 'H', 'K', 'Sze', 'Cs', 'P', 'Szo'];
+// "2. H" or "22–23. V–H" (ponytail: no month, the whole page is November only)
+const span = (v, napok, sep = ' ') => {
+  const ds = covered(v, napok).map(d => new Date(d));
+  return `${ds.map(d => d.getUTCDate()).join('–')}.${sep}${ds.map(d => WD[d.getUTCDay()]).join('–')}`;
+};
 
 const warn = document.getElementById('warn');
 let taken = new Map(); // 'YYYY-MM-DD' -> ['Név: menü', ...]
@@ -104,7 +112,7 @@ function update() {
   }
   const clash = picked.filter(d => taken.has(d));
   warn.textContent = clash.length
-    ? '⚠️ Erre már jelentkezett valaki: ' + clash.map(d => `${day(Date.parse(d))} – ${taken.get(d).join(', ')}`).join('; ')
+    ? '⚠️ Erre már jelentkezett valaki: ' + clash.map(d => `nov. ${span(d)} –${taken.get(d).join(', ')}`).join('; ')
     : '';
 }
 form.onchange = update;
@@ -126,13 +134,7 @@ async function load() {
       taken.set(d, [...(taken.get(d) || []), `${r.nev || 'Névtelen'}: ${r.menu}`]);
     update();
     rows.sort((a, b) => a.datum.localeCompare(b.datum));
-    tbody.replaceChildren(...rows.map(r => {
-      const start = Date.parse(r.datum);
-      return row([
-        day(start) + (r.napok === '2' ? ' – ' + day(start + 864e5) : ''),
-        r.nev || 'Névtelen', r.menu,
-      ]);
-    }));
+    tbody.replaceChildren(...rows.map(r => row([span(r.datum, r.napok, '\n'), r.nev || 'Névtelen', r.menu])));
     if (!rows.length) tbody.replaceChildren(row(['Még senki, légy te az első!', '', '']));
   } catch {
     tbody.replaceChildren(row(['Nem sikerült betölteni a listát.', '', '']));
