@@ -22,6 +22,17 @@
   button:hover { background: #a8432f; }
   button:disabled { opacity: .6; }
   small, #status { color: #8a7a70; font-weight: 400; }
+  #warn { color: #a8432f; font-weight: 600; margin: .25rem 0 0; }
+  .days { display: grid; grid-template-columns: repeat(7, 1fr); gap: .3rem; margin-top: .25rem; text-align: center; }
+  .days span { font-size: .8rem; color: #8a7a70; }
+  .days label { position: relative; margin: 0; padding: .5rem 0; border: 1px solid #d8c8b8; border-radius: 8px; cursor: pointer; }
+  .days label:hover { border-color: #c8553d; }
+  .days label.taken { background: #e8e4e0; color: #9a908a; }
+  .days label.second { background: #f3c9bd; border-color: #c8553d; color: #3b2f2a; }
+  .days label:has(:checked) { background: #c8553d; border-color: #c8553d; color: #fff; font-weight: 700; }
+  .days label:has(:focus-visible) { outline: 2px solid #3b2f2a; }
+  /* invisible but still focusable, so the browser can point at it when no day is picked */
+  .days input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -33,7 +44,14 @@
     <h2>Jelentkezés</h2>
     <form>
       <label>Neved <input name="nev" required maxlength="100"></label>
-      <label>Melyik napon hozod? <input type="date" name="datum" required min="2026-11-01" max="2026-11-30"></label>
+      <fieldset>
+        <legend>Melyik napon hozod? <small>(november)</small></legend>
+        <div class="days">
+          <span>H</span><span>K</span><span>Sze</span><span>Cs</span><span>P</span><span>Szo</span><span>V</span>
+        </div>
+        <small>A szürke napokra már jelentkezett valaki.</small>
+        <p id="warn" role="status"></p>
+      </fieldset>
       <fieldset>
         <legend>Hány napra főzöl?</legend>
         <label><input type="radio" name="napok" value="1" checked> 1 napra</label>
@@ -41,8 +59,6 @@
       </fieldset>
       <label>Mit hozol? <small>(pl. húsleves, rakott krumpli, sütemény)</small>
         <input name="menu" required maxlength="300"></label>
-      <label>Email <small>(csak mi látjuk)</small>
-        <input type="email" name="email" required maxlength="100"></label>
       <label>Telefonszám <small>(csak mi látjuk)</small>
         <input type="tel" name="telefon" required maxlength="30"></label>
       <label class="check"><input type="checkbox" name="mutat" value="igen" checked> Megjelenhet a nevem a listában</label>
@@ -74,10 +90,41 @@ const row = cells => {
 };
 const day = ms => new Date(ms).toLocaleDateString('hu-HU', { timeZone: 'UTC', month: 'short', day: 'numeric', weekday: 'short' });
 
+const warn = document.getElementById('warn');
+let taken = new Map(); // 'YYYY-MM-DD' -> ['Név: menü', ...]
+const covered = (d, napok) => napok === '2' ? [d, new Date(Date.parse(d) + 864e5).toISOString().slice(0, 10)] : [d];
+
+// gray out taken days, highlight the 2nd day, warn on overlap
+function update() {
+  const f = new FormData(form);
+  const picked = f.get('datum') ? covered(f.get('datum'), f.get('napok')) : [];
+  for (const input of form.querySelectorAll('.days input')) {
+    input.parentElement.classList.toggle('taken', taken.has(input.value));
+    input.parentElement.classList.toggle('second', input.value === picked[1]);
+  }
+  const clash = picked.filter(d => taken.has(d));
+  warn.textContent = clash.length
+    ? '⚠️ Erre már jelentkezett valaki: ' + clash.map(d => `${day(Date.parse(d))} – ${taken.get(d).join(', ')}`).join('; ')
+    : '';
+}
+form.onchange = update;
+
+// ponytail: November 2026 hardcoded: 30 days, the 1st is a Sunday (7th column, weeks start on Monday)
+for (let d = 1; d <= 30; d++) {
+  const v = `2026-11-${String(d).padStart(2, '0')}`;
+  const full = new Date(v).toLocaleDateString('hu-HU', { timeZone: 'UTC', month: 'long', day: 'numeric', weekday: 'long' });
+  document.querySelector('.days').insertAdjacentHTML('beforeend',
+    `<label${d === 1 ? ' style="grid-column-start:7"' : ''}><input type="radio" name="datum" value="${v}" required aria-label="${full}">${d}</label>`);
+}
+
 async function load() {
   try {
-    // skip rows that were cleared in the sheet instead of deleted
-    const rows = (await (await fetch(API)).json()).filter(r => r.datum);
+    // skip rows that were cleared in the sheet instead of deleted, or hold junk dates
+    const rows = (await (await fetch(API)).json()).filter(r => !isNaN(Date.parse(r.datum)));
+    taken = new Map();
+    for (const r of rows) for (const d of covered(r.datum, r.napok))
+      taken.set(d, [...(taken.get(d) || []), `${r.nev || 'Névtelen'}: ${r.menu}`]);
+    update();
     rows.sort((a, b) => a.datum.localeCompare(b.datum));
     tbody.replaceChildren(...rows.map(r => {
       const start = Date.parse(r.datum);
